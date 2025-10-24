@@ -1,51 +1,32 @@
 # ------------------------------
-# Stage 1 - Build frontend using Vite
-# ------------------------------
-FROM node:18 AS frontend
-
-WORKDIR /app
-
-# Copy package files and install dependencies
-COPY package*.json ./
-RUN npm install
-
-# Copy the rest of the app and build the frontend
-COPY . .
-RUN npm run build
-
-
-# ------------------------------
-# Stage 2 - Backend (Laravel + PHP + Composer)
+# Laravel + Vite Single-Stage Dockerfile for Render
 # ------------------------------
 FROM php:8.2-fpm
 
-# Install system dependencies and PHP extensions
+# Install system dependencies, PHP extensions, Node & npm
 RUN apt-get update && apt-get install -y \
-    git curl unzip libpng-dev libonig-dev libxml2-dev zip libzip-dev \
+    git curl unzip libpng-dev libonig-dev libxml2-dev zip libzip-dev nodejs npm \
     && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
 WORKDIR /var/www/html
 
-# Copy Laravel app files (excluding node_modules) from frontend stage
-COPY --from=frontend /app /var/www/html
+# Copy the entire project
+COPY . .
 
-# Copy the built Vite assets separately to ensure manifest exists
-COPY --from=frontend /app/public/build /var/www/html/public/build
+# Install frontend dependencies and build assets
+RUN npm install && npm run build
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Ensure Laravel has the right permissions for storage & cache
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+RUN chown -R www-data:www-data storage bootstrap/cache
 
-# Expose port
+# Expose port 8000 for Laravel serve
 EXPOSE 8000
 
-# Start Laravel server, run migrations, and clear caches at runtime
+# Runtime: run migrations, clear caches, and start Laravel server
 CMD php artisan migrate --force && \
     php artisan config:clear && \
     php artisan cache:clear && \
