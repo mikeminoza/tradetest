@@ -42,13 +42,12 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 # Ensure Laravel has the right permissions for storage & cache
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Clear caches just in case
-RUN php artisan config:clear \
- && php artisan cache:clear \
- && php artisan route:clear
-
 # Expose port
 EXPOSE 8000
 
-# Start Laravel server and run migrations
-CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000
+# Start Laravel server, run migrations, and clear caches at runtime
+CMD php artisan migrate --force && \
+    php artisan config:clear && \
+    php artisan cache:clear && \
+    php artisan route:clear && \
+    php artisan serve --host=0.0.0.0 --port=8000
