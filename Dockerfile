@@ -1,6 +1,4 @@
-# ------------------------------
-# Laravel + Vite Single-Stage Dockerfile for Render
-# ------------------------------
+# Simple Laravel + Vite Dockerfile for Render
 FROM php:8.2-fpm
 
 # Install system dependencies, PHP extensions, Node & npm
@@ -11,22 +9,25 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /var/www/html
 
-# Copy the entire project
+# Install Composer globally
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# Copy the project files
 COPY . .
 
-# Install frontend dependencies and build assets
+# Install frontend dependencies and build Vite assets
 RUN npm install && npm run build
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# Ensure Laravel has the right permissions for storage & cache
+# Ensure Laravel storage & cache are writable
 RUN chown -R www-data:www-data storage bootstrap/cache
 
-# Expose port 8000 for Laravel serve
+# Expose Laravel default port
 EXPOSE 8000
 
-# Runtime: run migrations, clear caches, and start Laravel server
+# Run migrations, clear caches, and start Laravel
 CMD php artisan migrate --force && \
     php artisan config:clear && \
     php artisan cache:clear && \
