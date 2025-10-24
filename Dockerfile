@@ -3,17 +3,14 @@
 # ---------------------------
 FROM node:18 AS build
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files and install dependencies
+# Copy and install dependencies
 COPY package*.json ./
 RUN npm install
 
-# Copy the rest of the app
+# Copy all files and build assets
 COPY . .
-
-# Build Vite assets for production
 RUN npm run build
 
 
@@ -22,32 +19,35 @@ RUN npm run build
 # ---------------------------
 FROM php:8.2-fpm
 
-# Install system dependencies & PHP extensions
+# Install system dependencies and PHP extensions
 RUN apt-get update && apt-get install -y \
     git unzip libzip-dev libpng-dev libonig-dev libxml2-dev zip curl \
  && docker-php-ext-install pdo_mysql mbstring zip exif pcntl bcmath gd
 
-# Copy Composer from official image
+# Copy Composer binary
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy all Laravel files
+# Copy Laravel app (except node_modules)
 COPY . .
 
-# Copy built Vite assets from the previous build stage
+# Copy built Vite assets from previous stage
 COPY --from=build /app/public/build /var/www/html/public/build
 
-# Install PHP dependencies and optimize Laravel
-RUN composer install --no-dev --optimize-autoloader \
- && php artisan config:clear \
+# Install PHP dependencies and optimize app
+RUN composer install --no-dev --optimize-autoloader
+
+# Clear all caches AFTER copying built files
+RUN php artisan config:clear \
  && php artisan route:clear \
  && php artisan view:clear \
- && php artisan optimize
+ && php artisan optimize:clear \
+ && php artisan storage:link
 
-# Expose port 8000 for Render
+# Expose the Laravel port
 EXPOSE 8000
 
-# Run migrations automatically, then start Laravel
+# Run migrations and start server
 CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000
