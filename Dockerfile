@@ -12,22 +12,18 @@ WORKDIR /var/www/html
 # Install Composer globally
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
-# Copy the project files
+# Copy project files
 COPY . .
 
-# Install frontend dependencies and build Vite assets
-RUN npm install && npm run build
+# Install frontend and build assets, then install PHP dependencies and fix permissions
+RUN npm install && npm run build \
+    && composer install --no-dev --optimize-autoloader --no-interaction \
+    && chown -R www-data:www-data storage bootstrap/cache
 
-# Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader --no-interaction
-
-# Ensure Laravel storage & cache are writable
-RUN chown -R www-data:www-data storage bootstrap/cache
-
-# Expose Laravel default port
+# Expose Laravel port
 EXPOSE 8000
 
-# Run migrations, clear caches, and start Laravel
+# Run migrations, clear caches, and serve Laravel at runtime
 CMD php artisan migrate --force && \
     php artisan config:clear && \
     php artisan cache:clear && \
