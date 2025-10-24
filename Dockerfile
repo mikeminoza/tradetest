@@ -1,53 +1,37 @@
-# ---------------------------
-# 1️⃣ Stage: Build Frontend (Vite)
-# ---------------------------
+# Stage 1 - Build frontend using Vite
 FROM node:18 AS frontend
 
 WORKDIR /app
-
-# Install dependencies
 COPY package*.json ./
 RUN npm install
-
-# Copy source and build assets
 COPY . .
-RUN npm run build  # This generates files in public/build
+RUN npm run build
 
-
-# ---------------------------
-# 2️⃣ Stage: Backend (Laravel + PHP)
-# ---------------------------
-FROM php:8.2-fpm AS backend
+# Stage 2 - Backend (Laravel + PHP + Composer)
+FROM php:8.2-fpm
 
 # Install system dependencies and PHP extensions
 RUN apt-get update && apt-get install -y \
-    git curl unzip libpq-dev libonig-dev libzip-dev zip \
-    && docker-php-ext-install pdo pdo_mysql mbstring zip bcmath
+    git curl unzip libpng-dev libonig-dev libxml2-dev zip libzip-dev \
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy Composer
+# Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-WORKDIR /var/www
+WORKDIR /var/www/html
 
-# Copy application source
-COPY . .
+# Copy Laravel app (including built assets from the previous stage)
+COPY --from=frontend /app /var/www/html
 
-# ✅ Copy built Vite assets from the frontend build stage
-COPY --from=frontend /app/public/build ./public/build
+# Install PHP dependencies (use --no-interaction for CI/CD)
+RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# Install Laravel dependencies (no dev)
-RUN composer install --no-dev --optimize-autoloader
+# Ensure Laravel has the right permissions for storage & cache
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# ✅ Clear and optimize Laravel caches
-RUN php artisan config:clear && \
-    php artisan route:clear && \
-    php artisan view:clear && \
-    php artisan optimize
-
-# ✅ Optional: link storage folder (common in Laravel)
-RUN php artisan storage:link || true
-
-# ✅ Run migrations automatically before serving
-CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000
-
+# Expose port
 EXPOSE 8000
+
+# Start Laravel server + run migrations
+CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000
