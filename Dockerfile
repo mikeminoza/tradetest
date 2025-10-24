@@ -1,4 +1,19 @@
 # ---------------------------
+# 1️⃣ Stage: Build Frontend
+# ---------------------------
+FROM node:18 AS build
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+RUN npm run build
+
+
+# ---------------------------
 # 2️⃣ Stage: PHP + Laravel
 # ---------------------------
 FROM php:8.2-fpm
@@ -13,12 +28,12 @@ WORKDIR /var/www/html
 
 COPY . .
 
+# ✅ Copy built Vite assets from the previous (build) stage
 COPY --from=build /app/public/build /var/www/html/public/build
 
-# Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# ✅ Only clear caches AFTER .env and database are correct
+# ✅ Run setup and serve Laravel
 CMD php artisan config:clear \
  && php artisan route:clear \
  && php artisan view:clear \
@@ -26,3 +41,5 @@ CMD php artisan config:clear \
  && php artisan storage:link \
  && php artisan migrate --force \
  && php artisan serve --host=0.0.0.0 --port=8000
+
+EXPOSE 8000
